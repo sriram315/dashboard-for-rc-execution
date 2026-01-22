@@ -1,0 +1,5 @@
+{
+  "name": "Dashboard for RC execution",
+  "description": "A dynamic dashboard that transforms Google Sheets data into visual insights using Recharts and provides AI-driven analysis.",
+  "requestFramePermissions": []
+}
