@@ -1,0 +1,61 @@
+name: Deploy Dashboard RC Frontend
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📤 Upload project to VM
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: 22
+          source: "."
+          target: "~/dashboard-for-rc-execution"
+          overwrite: true
+          rm: true
+
+      - name: 🚀 Build & Run Docker container on VM
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: 22
+          envs: GITHUB_SHA,GEMINI_API_KEY
+          script: |
+            set -e
+            cd ~/dashboard-for-rc-execution
+
+            echo "🛑 Stopping old container if exists..."
+            docker stop dashboardrc || true
+            docker rm dashboardrc || true
+
+            echo "⚙️ Disabling Docker BuildKit..."
+            export DOCKER_BUILDKIT=0
+
+            echo "🏗️ Building Docker image..."
+            docker build -t dashboardrc:${GITHUB_SHA} .
+
+            echo "🚀 Running new container..."
+            docker run -d \
+              --name dashboardrc \
+              --restart unless-stopped \
+              -p 3006:80 \
+              -e GEMINI_API_KEY=${GEMINI_API_KEY} \
+              dashboardrc:${GITHUB_SHA}
+
+            echo "🧹 Cleaning unused images..."
+            docker image prune -f
+
+            echo "✅ Deployment completed successfully!"
